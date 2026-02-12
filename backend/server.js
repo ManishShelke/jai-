@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const multer = require("multer");
 const authRoutes = require("./routes/auth");
 const analyzeRoutes = require("./routes/analyze");
+const buildRoutes = require("./routes/build");
 
 dotenv.config();
 
@@ -14,6 +15,16 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Request logging with status code
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
 
 // Configure multer for file uploads (memory storage)
 const upload = multer({
@@ -38,6 +49,7 @@ app.set("upload", upload);
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/analyze", analyzeRoutes);
+app.use("/api/build", buildRoutes);
 
 // Health check
 app.get("/api/health", (req, res) => {

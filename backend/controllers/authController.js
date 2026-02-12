@@ -7,11 +7,12 @@ const users = [];
 // Register new user
 const register = async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name: providedName } = req.body;
+    const name = providedName || email.split('@')[0];
 
     // Validation
-    if (!email || !password || !name) {
-      return res.status(400).json({ error: 'All fields are required' });
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
     // Check if user already exists

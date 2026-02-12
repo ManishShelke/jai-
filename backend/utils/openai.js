@@ -16,50 +16,72 @@ const analyzeFeedback = async (resumeText, jobRole, industry, atsResults) => {
     // Get the generative model
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
-    const prompt = `You are an expert resume analyst and career coach. Analyze the provided resume data and give detailed, actionable feedback.
+    const prompt = `You are an advanced ATS Resume Analyzer and Career Intelligence Engine.
+Analyze the provided resume text for a ${jobRole} position in the ${industry} industry.
 
-IMPORTANT RULES:
-1. DO NOT calculate or mention ATS scores - they are already calculated
-2. Focus on qualitative analysis and improvements
-3. Be specific and actionable in your recommendations
-4. Provide your analysis in valid JSON format ONLY, with no additional text before or after
+INPUT DATA:
+- RESUME TEXT: ${resumeText.substring(0, 4000)}
+- ATS KEYWORD DATA: Matched: ${atsResults.matchedKeywords.join(', ')}, Missing: ${atsResults.missingKeywords.join(', ')}
 
-Analyze this resume for a ${jobRole} position in the ${industry} industry.
+YOUR TASK:
+Generate a structured evaluation across EXACTLY 10 sections:
+1. Contact Information Quality
+2. Professional Summary Strength
+3. Skills Relevance & Depth
+4. Work Experience Impact
+5. Projects Evaluation
+6. Education & Certifications
+7. ATS Keyword Match
+8. Formatting & Structure Safety
+9. Grammar & Readability
+10. Overall Personal Branding
 
-RESUME TEXT:
-${resumeText.substring(0, 4000)}
+For each section, provide:
+- Score (0-10)
+- Detailed Analysis
+- Specific Strengths (list)
+- Specific Weaknesses (list)
+- Actionable Improvement Suggestions with examples (list)
 
-ATS ANALYSIS RESULTS:
-- Matched Keywords: ${atsResults.matchedKeywords.join(', ')}
-- Missing Keywords: ${atsResults.missingKeywords.join(', ')}
-- Section Status: ${JSON.stringify(atsResults.sectionStatus)}
+Finally, provide:
+- Overall ATS Score (0-100)
+- Top 3 Priority Improvements
+- Short professional summary (2-3 sentences)
 
-Provide your response as a JSON object with this exact structure:
+IMPORTANT: Provide your response in valid JSON format ONLY, with no additional text.
+Structure your JSON exactly like this:
 {
-  "strengths": ["strength 1", "strength 2", "strength 3"],
-  "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
-  "improvements": ["improvement 1", "improvement 2", "improvement 3"],
-  "toRemove": ["item to remove 1", "item to remove 2"],
-  "optimization": "Overall optimization advice in 2-3 sentences"
+  "sections": [
+    {
+      "name": "Contact Information Quality",
+      "score": 8,
+      "analysis": "...",
+      "strengths": ["...", "..."],
+      "weaknesses": ["...", "..."],
+      "suggestions": ["...", "..."]
+    },
+    ... (total 10 sections)
+  ],
+  "overallScore": 85,
+  "topImprovements": ["...", "...", "..."],
+  "summary": "..."
 }`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    // Extract JSON from response (remove markdown code blocks if present)
+    // Extract JSON from response
     let jsonText = text.trim();
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\n?/g, '');
+    if (jsonText.includes('```')) {
+      jsonText = jsonText.match(/\{[\s\S]*\}/)?.[0] || jsonText;
     }
 
     const analysis = JSON.parse(jsonText);
 
-    // Validate response structure
-    if (!analysis.strengths || !analysis.weaknesses || !analysis.improvements) {
-      throw new Error('Invalid response format from Gemini');
+    // Basic validation
+    if (!analysis.sections || !Array.isArray(analysis.sections)) {
+      throw new Error('Invalid response structure from Gemini');
     }
 
     return analysis;
@@ -69,29 +91,92 @@ Provide your response as a JSON object with this exact structure:
     
     // Provide fallback analysis if Gemini fails
     return {
-      strengths: [
-        'Resume includes relevant experience for the role',
-        'Good keyword coverage based on the analysis',
-        'Professional presentation of information'
+      sections: Array.from({ length: 10 }).map((_, i) => ({
+        name: [
+          "Contact Information Quality", "Professional Summary Strength", "Skills Relevance & Depth",
+          "Work Experience Impact", "Projects Evaluation", "Education & Certifications",
+          "ATS Keyword Match", "Formatting & Structure Safety", "Grammar & Readability", "Overall Personal Branding"
+        ][i],
+        score: 7,
+        analysis: "Generic analysis provided as a fallback due to API timeout or error.",
+        strengths: ["Relevant content detected"],
+        weaknesses: ["Keyword optimization could be improved"],
+        suggestions: ["Consider adding more measurable achievements"]
+      })),
+      overallScore: 70,
+      topImprovements: [
+        "Optimize keywords for target role",
+        "Add measurable accomplishments",
+        "Enhance professional summary"
       ],
-      weaknesses: [
-        'Could improve keyword optimization for better ATS performance',
-        'Some expected sections may need enhancement',
-        'Consider adding more quantifiable achievements'
-      ],
-      improvements: [
-        `Add more ${jobRole}-specific keywords and technical terms`,
-        'Include measurable achievements with numbers and percentages',
-        'Ensure all required sections are comprehensive and well-structured',
-        'Tailor the resume content specifically for the ${industry} industry'
-      ],
-      toRemove: [
-        'Remove generic objective statements if present',
-        'Remove outdated or irrelevant skills and experiences'
-      ],
-      optimization: `Focus on tailoring your resume to the ${jobRole} role in the ${industry} industry. Highlight measurable achievements and ensure all critical sections demonstrate your relevant expertise and impact.`
+      summary: "Your resume shows a strong foundation but requires target-specific optimization to excel in ATS screening."
     };
   }
 };
 
-module.exports = { analyzeFeedback };
+
+/**
+ * Update resume data based on user message using Google Gemini
+ * @param {Object} currentData - Current resume data
+ * @param {string} userMessage - User's request
+ * @param {Array} history - Chat history
+ * @returns {Promise<Object>} Updated resume data and AI response
+ */
+const buildResume = async (currentData, userMessage, history) => {
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+
+    const prompt = `You are an AI Resume Assistant. Your goal is to help the user build a professional resume through a chat interface.
+    
+    Current Resume Data:
+    ${JSON.stringify(currentData, null, 2)}
+    
+    Recent Chat History:
+    ${JSON.stringify(history, null, 2)}
+    
+    User Message: "${userMessage}"
+    
+    INSTRUCTIONS:
+    1. Analyze the user's message to update the resume data.
+    2. If the user provides personal info, experience, education, or skills, update the corresponding fields in the JSON.
+    3. If the user is asking for advice, provide it and keep the JSON as is or with minor improvements.
+    4. Provide your response as a valid JSON object with this exact structure:
+    {
+      "resumeData": { ... updated resume data ... },
+      "chatResponse": "A helpful response to the user about what was updated or answering their question"
+    }
+    
+    Resume Data Structure:
+    {
+      "personalInfo": { "fullName": "", "email": "", "phone": "", "location": "", "summary": "" },
+      "experience": [{ "company": "", "position": "", "duration": "", "description": "" }],
+      "education": [{ "school": "", "degree": "", "year": "" }],
+      "skills": ["SKILL1", "SKILL2"]
+    }
+    
+    Respond ONLY with the JSON object.`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    let jsonText = text.trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/```\n?/g, '');
+    }
+
+    const output = JSON.parse(jsonText);
+    return output;
+
+  } catch (error) {
+    console.error('Gemini Build API error:', error);
+    return {
+      resumeData: currentData,
+      chatResponse: "I'm sorry, I encountered an error while processing your request. Please try again."
+    };
+  }
+};
+
+module.exports = { analyzeFeedback, buildResume };
