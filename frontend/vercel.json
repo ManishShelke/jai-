@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://resume-iq-backend.onrender.com/api/:path*"
+    }
+  ]
+}
