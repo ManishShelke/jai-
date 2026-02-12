@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://resume-iq-backend.onrender.com/api/:path*"
+      "destination": "https://resume-iq-backend-xv-d56rqnqp7c73bmhsup.onrender.com/api/:path*"
     }
   ]
 }
